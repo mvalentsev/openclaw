@@ -157,11 +157,13 @@ export function clearMatrixCredentials(
 
 export function credentialsMatchConfig(
   stored: MatrixStoredCredentials,
-  config: { homeserver: string; userId: string },
+  config: { homeserver: string; userId: string; accessToken?: string },
 ): boolean {
-  // If userId is empty (token-based auth), only match homeserver
   if (!config.userId) {
-    return stored.homeserver === config.homeserver;
+    if (!config.accessToken) {
+      return false;
+    }
+    return stored.homeserver === config.homeserver && stored.accessToken === config.accessToken;
   }
   return stored.homeserver === config.homeserver && stored.userId === config.userId;
 }

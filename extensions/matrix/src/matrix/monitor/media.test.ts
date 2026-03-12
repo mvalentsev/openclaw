@@ -52,8 +52,10 @@ describe("downloadMatrixMedia", () => {
       file,
     });
 
-    // decryptMedia should be called with just the file object (it handles download internally)
-    expect(decryptMedia).toHaveBeenCalledWith(file);
+    expect(decryptMedia).toHaveBeenCalledWith(file, {
+      maxBytes: 1024,
+      readIdleTimeoutMs: 30_000,
+    });
     expect(saveMediaBuffer).toHaveBeenCalledWith(
       Buffer.from("decrypted"),
       "image/png",
@@ -98,5 +100,25 @@ describe("downloadMatrixMedia", () => {
 
     expect(decryptMedia).not.toHaveBeenCalled();
     expect(saveMediaBuffer).not.toHaveBeenCalled();
+  });
+
+  it("passes byte limits through plain media downloads", async () => {
+    const downloadContent = vi.fn().mockResolvedValue(Buffer.from("plain"));
+
+    const client = {
+      downloadContent,
+    } as unknown as import("../sdk.js").MatrixClient;
+
+    await downloadMatrixMedia({
+      client,
+      mxcUrl: "mxc://example/file",
+      contentType: "image/png",
+      maxBytes: 4096,
+    });
+
+    expect(downloadContent).toHaveBeenCalledWith("mxc://example/file", {
+      maxBytes: 4096,
+      readIdleTimeoutMs: 30_000,
+    });
   });
 });

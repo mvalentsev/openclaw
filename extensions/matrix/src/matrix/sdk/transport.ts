@@ -1,3 +1,5 @@
+import { readResponseWithLimit } from "./read-response-with-limit.js";
+
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 type QueryValue =
@@ -107,6 +109,8 @@ export async function performMatrixRequest(params: {
   body?: unknown;
   timeoutMs: number;
   raw?: boolean;
+  maxBytes?: number;
+  readIdleTimeoutMs?: number;
   allowAbsoluteEndpoint?: boolean;
 }): Promise<{ response: Response; text: string; buffer: Buffer }> {
   const isAbsoluteEndpoint =
@@ -152,7 +156,24 @@ export async function performMatrixRequest(params: {
       signal: controller.signal,
     });
     if (params.raw) {
-      const bytes = Buffer.from(await response.arrayBuffer());
+      const contentLength = response.headers.get("content-length");
+      if (params.maxBytes && contentLength) {
+        const length = Number(contentLength);
+        if (Number.isFinite(length) && length > params.maxBytes) {
+          throw new Error(
+            `Matrix media exceeds configured size limit (${length} bytes > ${params.maxBytes} bytes)`,
+          );
+        }
+      }
+      const bytes = params.maxBytes
+        ? await readResponseWithLimit(response, params.maxBytes, {
+            onOverflow: ({ maxBytes, size }) =>
+              new Error(
+                `Matrix media exceeds configured size limit (${size} bytes > ${maxBytes} bytes)`,
+              ),
+            chunkTimeoutMs: params.readIdleTimeoutMs,
+          })
+        : Buffer.from(await response.arrayBuffer());
       return {
         response,
         text: bytes.toString("utf8"),

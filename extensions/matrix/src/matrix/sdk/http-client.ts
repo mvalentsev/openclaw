@@ -43,6 +43,8 @@ export class MatrixAuthedHttpClient {
     endpoint: string;
     qs?: QueryParams;
     timeoutMs: number;
+    maxBytes?: number;
+    readIdleTimeoutMs?: number;
     allowAbsoluteEndpoint?: boolean;
   }): Promise<Buffer> {
     const { response, buffer } = await performMatrixRequest({
@@ -53,6 +55,8 @@ export class MatrixAuthedHttpClient {
       qs: params.qs,
       timeoutMs: params.timeoutMs,
       raw: true,
+      maxBytes: params.maxBytes,
+      readIdleTimeoutMs: params.readIdleTimeoutMs,
       allowAbsoluteEndpoint: params.allowAbsoluteEndpoint,
     });
     if (!response.ok) {

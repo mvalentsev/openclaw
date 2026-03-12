@@ -363,6 +363,7 @@ export async function resolveMatrixAuth(params?: {
     credentialsMatchConfig(cached, {
       homeserver: resolved.homeserver,
       userId: resolved.userId || "",
+      accessToken: resolved.accessToken,
     })
       ? cached
       : null;

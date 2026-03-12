@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setMatrixRuntime } from "../runtime.js";
 import {
+  credentialsMatchConfig,
   loadMatrixCredentials,
   clearMatrixCredentials,
   resolveMatrixCredentialsPath,
@@ -115,5 +116,39 @@ describe("matrix credentials storage", () => {
 
     expect(fs.existsSync(currentPath)).toBe(false);
     expect(fs.existsSync(legacyPath)).toBe(false);
+  });
+
+  it("requires a token match when userId is absent", () => {
+    expect(
+      credentialsMatchConfig(
+        {
+          homeserver: "https://matrix.example.org",
+          userId: "@old:example.org",
+          accessToken: "tok-old",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          homeserver: "https://matrix.example.org",
+          userId: "",
+          accessToken: "tok-new",
+        },
+      ),
+    ).toBe(false);
+
+    expect(
+      credentialsMatchConfig(
+        {
+          homeserver: "https://matrix.example.org",
+          userId: "@bot:example.org",
+          accessToken: "tok-123",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          homeserver: "https://matrix.example.org",
+          userId: "",
+          accessToken: "tok-123",
+        },
+      ),
+    ).toBe(true);
   });
 });

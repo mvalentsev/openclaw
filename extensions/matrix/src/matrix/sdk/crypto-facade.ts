@@ -25,7 +25,10 @@ export type MatrixCryptoFacade = {
   isRoomEncrypted: (roomId: string) => Promise<boolean>;
   requestOwnUserVerification: () => Promise<unknown | null>;
   encryptMedia: (buffer: Buffer) => Promise<{ buffer: Buffer; file: Omit<EncryptedFile, "url"> }>;
-  decryptMedia: (file: EncryptedFile) => Promise<Buffer>;
+  decryptMedia: (
+    file: EncryptedFile,
+    opts?: { maxBytes?: number; readIdleTimeoutMs?: number },
+  ) => Promise<Buffer>;
   getRecoveryKey: () => Promise<{
     encodedPrivateKey?: string;
     keyId?: string | null;
@@ -66,7 +69,10 @@ export function createMatrixCryptoFacade(deps: {
     eventType: string,
     stateKey?: string,
   ) => Promise<Record<string, unknown>>;
-  downloadContent: (mxcUrl: string) => Promise<Buffer>;
+  downloadContent: (
+    mxcUrl: string,
+    opts?: { maxBytes?: number; readIdleTimeoutMs?: number },
+  ) => Promise<Buffer>;
 }): MatrixCryptoFacade {
   return {
     prepare: async (_joinedRooms: string[]) => {
@@ -116,8 +122,11 @@ export function createMatrixCryptoFacade(deps: {
         },
       };
     },
-    decryptMedia: async (file: EncryptedFile): Promise<Buffer> => {
-      const encrypted = await deps.downloadContent(file.url);
+    decryptMedia: async (
+      file: EncryptedFile,
+      opts?: { maxBytes?: number; readIdleTimeoutMs?: number },
+    ): Promise<Buffer> => {
+      const encrypted = await deps.downloadContent(file.url, opts);
       const metadata: EncryptedFile = {
         url: file.url,
         key: file.key,

@@ -570,7 +570,14 @@ export class MatrixClient {
     return this.client.mxcUrlToHttp(mxcUrl, undefined, undefined, undefined, true, false, true);
   }
 
-  async downloadContent(mxcUrl: string, allowRemote = true): Promise<Buffer> {
+  async downloadContent(
+    mxcUrl: string,
+    opts: {
+      allowRemote?: boolean;
+      maxBytes?: number;
+      readIdleTimeoutMs?: number;
+    } = {},
+  ): Promise<Buffer> {
     const parsed = parseMxc(mxcUrl);
     if (!parsed) {
       throw new Error(`Invalid Matrix content URI: ${mxcUrl}`);
@@ -579,8 +586,10 @@ export class MatrixClient {
     const response = await this.httpClient.requestRaw({
       method: "GET",
       endpoint,
-      qs: { allow_remote: allowRemote },
+      qs: { allow_remote: opts.allowRemote ?? true },
       timeoutMs: this.localTimeoutMs,
+      maxBytes: opts.maxBytes,
+      readIdleTimeoutMs: opts.readIdleTimeoutMs,
     });
     return response;
   }
