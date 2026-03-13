@@ -102,12 +102,14 @@ type MatrixVerificationSession = {
   verifyStarted: boolean;
   startRequested: boolean;
   sasAutoConfirmStarted: boolean;
+  sasAutoConfirmTimer?: ReturnType<typeof setTimeout>;
   sasCallbacks?: MatrixShowSasCallbacks;
   reciprocateQrCallbacks?: MatrixShowQrCodeCallbacks;
 };
 
 const MAX_TRACKED_VERIFICATION_SESSIONS = 256;
 const TERMINAL_SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
+const SAS_AUTO_CONFIRM_DELAY_MS = 1500;
 
 export class MatrixVerificationManager {
   private readonly verificationSessions = new Map<string, MatrixVerificationSession>();
@@ -173,6 +175,14 @@ export class MatrixVerificationManager {
 
   private touchVerificationSession(session: MatrixVerificationSession): void {
     session.updatedAtMs = Date.now();
+  }
+
+  private clearSasAutoConfirmTimer(session: MatrixVerificationSession): void {
+    if (!session.sasAutoConfirmTimer) {
+      return;
+    }
+    clearTimeout(session.sasAutoConfirmTimer);
+    session.sasAutoConfirmTimer = undefined;
   }
 
   private buildVerificationSummary(session: MatrixVerificationSession): MatrixVerificationSummary {
@@ -329,6 +339,7 @@ export class MatrixVerificationManager {
       this.touchVerificationSession(session);
     });
     verifier.on(VerifierEvent.Cancel, (err) => {
+      this.clearSasAutoConfirmTimer(session);
       session.error = err instanceof Error ? err.message : String(err);
       this.touchVerificationSession(session);
     });
@@ -336,7 +347,7 @@ export class MatrixVerificationManager {
   }
 
   private maybeAutoConfirmSas(session: MatrixVerificationSession): void {
-    if (session.sasAutoConfirmStarted) {
+    if (session.sasAutoConfirmStarted || session.sasAutoConfirmTimer) {
       return;
     }
     if (this.readRequestValue(session.request, () => session.request.initiatedByMe, true)) {
@@ -347,16 +358,29 @@ export class MatrixVerificationManager {
       return;
     }
     session.sasCallbacks = callbacks;
-    session.sasAutoConfirmStarted = true;
-    void callbacks
-      .confirm()
-      .then(() => {
-        this.touchVerificationSession(session);
-      })
-      .catch((err) => {
-        session.error = err instanceof Error ? err.message : String(err);
-        this.touchVerificationSession(session);
-      });
+    // Give the remote client a moment to surface the compare-emoji UI before
+    // we send our MAC and finish our side of the SAS flow.
+    session.sasAutoConfirmTimer = setTimeout(() => {
+      session.sasAutoConfirmTimer = undefined;
+      const phase = this.readRequestValue(
+        session.request,
+        () => session.request.phase,
+        VerificationPhase.Requested,
+      );
+      if (phase >= VerificationPhase.Cancelled) {
+        return;
+      }
+      session.sasAutoConfirmStarted = true;
+      void callbacks
+        .confirm()
+        .then(() => {
+          this.touchVerificationSession(session);
+        })
+        .catch((err) => {
+          session.error = err instanceof Error ? err.message : String(err);
+          this.touchVerificationSession(session);
+        });
+    }, SAS_AUTO_CONFIRM_DELAY_MS);
   }
 
   private ensureVerificationStarted(session: MatrixVerificationSession): void {
@@ -535,7 +559,9 @@ export class MatrixVerificationManager {
     if (!callbacks) {
       throw new Error("Matrix SAS confirmation is not available for this verification request");
     }
+    this.clearSasAutoConfirmTimer(session);
     session.sasCallbacks = callbacks;
+    session.sasAutoConfirmStarted = true;
     await callbacks.confirm();
     this.touchVerificationSession(session);
     return this.buildVerificationSummary(session);
@@ -547,6 +573,7 @@ export class MatrixVerificationManager {
     if (!callbacks) {
       throw new Error("Matrix SAS mismatch is not available for this verification request");
     }
+    this.clearSasAutoConfirmTimer(session);
     session.sasCallbacks = callbacks;
     callbacks.mismatch();
     this.touchVerificationSession(session);

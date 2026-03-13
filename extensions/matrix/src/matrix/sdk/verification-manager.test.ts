@@ -165,7 +165,7 @@ describe("MatrixVerificationManager", () => {
     expect(sas.emoji?.length).toBe(3);
 
     await manager.confirmVerificationSas(tracked.id);
-    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(confirm).toHaveBeenCalledTimes(1);
 
     manager.mismatchVerificationSas(tracked.id);
     expect(mismatch).toHaveBeenCalledTimes(1);
@@ -256,7 +256,8 @@ describe("MatrixVerificationManager", () => {
     expect(manager.getVerificationSas(tracked.id).decimal).toEqual([1234, 5678, 9012]);
   });
 
-  it("auto-confirms inbound SAS when callbacks are available", async () => {
+  it("auto-confirms inbound SAS after a short delay", async () => {
+    vi.useFakeTimers();
     const confirm = vi.fn(async () => {});
     const verifier = new MockVerifier(
       {
@@ -280,12 +281,18 @@ describe("MatrixVerificationManager", () => {
       initiatedByMe: false,
       verifier,
     });
-    const manager = new MatrixVerificationManager();
-    manager.trackVerificationRequest(request);
+    try {
+      const manager = new MatrixVerificationManager();
+      manager.trackVerificationRequest(request);
 
-    await vi.waitFor(() => {
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(confirm).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(600);
       expect(confirm).toHaveBeenCalledTimes(1);
-    });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not auto-confirm SAS for verifications initiated by this device", async () => {
@@ -318,6 +325,46 @@ describe("MatrixVerificationManager", () => {
       manager.trackVerificationRequest(request);
 
       await vi.advanceTimersByTimeAsync(20);
+      expect(confirm).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels a pending auto-confirm when SAS is explicitly mismatched", async () => {
+    vi.useFakeTimers();
+    const confirm = vi.fn(async () => {});
+    const mismatch = vi.fn();
+    const verifier = new MockVerifier(
+      {
+        sas: {
+          decimal: [444, 555, 666],
+          emoji: [
+            ["panda", "Panda"],
+            ["rocket", "Rocket"],
+            ["crown", "Crown"],
+          ],
+        },
+        confirm,
+        mismatch,
+        cancel: vi.fn(),
+      },
+      null,
+      async () => {},
+    );
+    const request = new MockVerificationRequest({
+      transactionId: "txn-mismatch-cancels-auto-confirm",
+      initiatedByMe: false,
+      verifier,
+    });
+    try {
+      const manager = new MatrixVerificationManager();
+      const tracked = manager.trackVerificationRequest(request);
+
+      manager.mismatchVerificationSas(tracked.id);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(mismatch).toHaveBeenCalledTimes(1);
       expect(confirm).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
