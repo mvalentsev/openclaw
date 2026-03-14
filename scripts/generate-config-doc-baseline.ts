@@ -19,12 +19,15 @@ const result = await writeConfigDocBaselineStatefile({
 
 if (checkOnly) {
   if (!result.changed) {
-    console.log(`OK ${path.relative(repoRoot, result.statefilePath)}`);
+    console.log(
+      `OK ${path.relative(repoRoot, result.jsonPath)} ${path.relative(repoRoot, result.statefilePath)}`,
+    );
     process.exit(0);
   }
   console.error(
     [
-      "Config doc baseline statefile is out of date.",
+      "Config doc baseline artifacts are out of date.",
+      `Expected current: ${path.relative(repoRoot, result.jsonPath)}`,
       `Expected current: ${path.relative(repoRoot, result.statefilePath)}`,
       "Run: node --import tsx scripts/generate-config-doc-baseline.ts --write",
     ].join("\n"),
@@ -32,4 +35,9 @@ if (checkOnly) {
   process.exit(1);
 }
 
-console.log(`Wrote ${path.relative(repoRoot, result.statefilePath)}`);
+console.log(
+  [
+    `Wrote ${path.relative(repoRoot, result.jsonPath)}`,
+    `Wrote ${path.relative(repoRoot, result.statefilePath)}`,
+  ].join("\n"),
+);

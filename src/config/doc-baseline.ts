@@ -46,6 +46,7 @@ export type ConfigDocBaseline = {
 };
 
 export type ConfigDocBaselineStatefileRender = {
+  json: string;
   jsonl: string;
   baseline: ConfigDocBaseline;
 };
@@ -53,10 +54,12 @@ export type ConfigDocBaselineStatefileRender = {
 export type ConfigDocBaselineStatefileWriteResult = {
   changed: boolean;
   wrote: boolean;
+  jsonPath: string;
   statefilePath: string;
 };
 
 const GENERATED_BY = "scripts/generate-config-doc-baseline.ts" as const;
+const DEFAULT_JSON_OUTPUT = "docs/.generated/config-baseline.json";
 const DEFAULT_STATEFILE_OUTPUT = "docs/.generated/config-baseline.jsonl";
 function resolveRepoRoot(): string {
   const fromPackage = resolveOpenClawPackageRootSync({
@@ -336,6 +339,7 @@ export async function renderConfigDocBaselineStatefile(
   baseline?: ConfigDocBaseline,
 ): Promise<ConfigDocBaselineStatefileRender> {
   const resolvedBaseline = baseline ?? (await buildConfigDocBaseline());
+  const json = `${JSON.stringify(resolvedBaseline, null, 2)}\n`;
   const metadataLine = JSON.stringify({
     generatedBy: GENERATED_BY,
     recordType: "meta",
@@ -348,6 +352,7 @@ export async function renderConfigDocBaselineStatefile(
     }),
   );
   return {
+    json,
     jsonl: `${[metadataLine, ...entryLines].join("\n")}\n`,
     baseline: resolvedBaseline,
   };
@@ -374,26 +379,32 @@ async function writeIfChanged(filePath: string, next: string): Promise<boolean> 
 export async function writeConfigDocBaselineStatefile(params?: {
   repoRoot?: string;
   check?: boolean;
+  jsonPath?: string;
   statefilePath?: string;
 }): Promise<ConfigDocBaselineStatefileWriteResult> {
   const repoRoot = params?.repoRoot ?? resolveRepoRoot();
+  const jsonPath = path.resolve(repoRoot, params?.jsonPath ?? DEFAULT_JSON_OUTPUT);
   const statefilePath = path.resolve(repoRoot, params?.statefilePath ?? DEFAULT_STATEFILE_OUTPUT);
   const rendered = await renderConfigDocBaselineStatefile();
+  const currentJson = await readIfExists(jsonPath);
   const currentStatefile = await readIfExists(statefilePath);
-  const changed = currentStatefile !== rendered.jsonl;
+  const changed = currentJson !== rendered.json || currentStatefile !== rendered.jsonl;
 
   if (params?.check) {
     return {
       changed,
       wrote: false,
+      jsonPath,
       statefilePath,
     };
   }
 
-  const wrote = await writeIfChanged(statefilePath, rendered.jsonl);
+  const wroteJson = await writeIfChanged(jsonPath, rendered.json);
+  const wroteStatefile = await writeIfChanged(statefilePath, rendered.jsonl);
   return {
     changed,
-    wrote,
+    wrote: wroteJson || wroteStatefile,
+    jsonPath,
     statefilePath,
   };
 }

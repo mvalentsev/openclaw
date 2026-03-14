@@ -24,6 +24,7 @@ describe("config doc baseline", () => {
     const first = await renderConfigDocBaselineStatefile();
     const second = await renderConfigDocBaselineStatefile();
 
+    expect(second.json).toBe(first.json);
     expect(second.jsonl).toBe(first.jsonl);
   });
 
@@ -70,17 +71,24 @@ describe("config doc baseline", () => {
 
     const initial = await writeConfigDocBaselineStatefile({
       repoRoot: tempRoot,
+      jsonPath: "docs/.generated/config-baseline.json",
       statefilePath: "docs/.generated/config-baseline.jsonl",
     });
     expect(initial.wrote).toBe(true);
 
     const current = await writeConfigDocBaselineStatefile({
       repoRoot: tempRoot,
+      jsonPath: "docs/.generated/config-baseline.json",
       statefilePath: "docs/.generated/config-baseline.jsonl",
       check: true,
     });
     expect(current.changed).toBe(false);
 
+    await fs.writeFile(
+      path.join(tempRoot, "docs/.generated/config-baseline.json"),
+      '{"generatedBy":"broken","entries":[]}\n',
+      "utf8",
+    );
     await fs.writeFile(
       path.join(tempRoot, "docs/.generated/config-baseline.jsonl"),
       '{"recordType":"meta","generatedBy":"broken","totalPaths":0}\n',
@@ -89,6 +97,7 @@ describe("config doc baseline", () => {
 
     const stale = await writeConfigDocBaselineStatefile({
       repoRoot: tempRoot,
+      jsonPath: "docs/.generated/config-baseline.json",
       statefilePath: "docs/.generated/config-baseline.jsonl",
       check: true,
     });
